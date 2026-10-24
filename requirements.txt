@@ -1,0 +1,10 @@
+pandas
+numpy
+requests
+matplotlib
+lightgbm
+scikit-learn
+holidays
+# 방문 의도 분류(intent) 학습·실행 때만 필요
+torch
+transformers

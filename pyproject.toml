@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miribom-ai"
+version = "0.1.0"
+description = "미리봄 AI 모델: 급증 탐지, 방문 의도 분류, 규모 예측"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["pandas", "numpy", "requests", "lightgbm", "scikit-learn", "holidays"]
+
+[project.optional-dependencies]
+intent = ["torch", "transformers"]
+plot = ["matplotlib"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

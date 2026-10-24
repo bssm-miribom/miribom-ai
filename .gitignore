@@ -1,0 +1,15 @@
+.env
+__pycache__/
+.ipynb_checkpoints/
+*.csv.tmp
+.DS_Store
+# 글 원문이 들어간 파일과 큰 모델 파일은 올리지 않음
+data/intent_*.csv
+data/scale_table.csv
+data/replay_*
+models/intent/
+_to_delete/
+data/daily/*_demo.json
+data/daily/latest_demo.json
+models/demo/
+*.egg-info/
