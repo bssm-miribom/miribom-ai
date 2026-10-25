@@ -13,3 +13,4 @@ data/daily/*_demo.json
 data/daily/latest_demo.json
 models/demo/
 *.egg-info/
+data/raw/

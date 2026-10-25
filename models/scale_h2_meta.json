@@ -1,0 +1,20 @@
+{
+ "features": [
+  "dow_h2",
+  "hol_h2",
+  "rest_h2",
+  "run_h2",
+  "to_rest_h2",
+  "log_base",
+  "ratio",
+  "ratio_max3",
+  "ratio_growth3",
+  "intent_posts",
+  "intent_growth3"
+ ],
+ "quantiles": [
+  0.1,
+  0.5,
+  0.9
+ ]
+}

@@ -13,7 +13,8 @@ def fetch_datalab(keywords, end_date, client_id, client_secret, days=FETCH_DAYS)
         "timeUnit": "date",
         "keywordGroups": [{"groupName": keywords[0], "keywords": keywords}],
     }
-    headers = {"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": client_secret,
+    # API HUB 헤더 (예전 개발자센터의 X-Naver-Client-Id 방식은 신규 발급이 막힘)
+    headers = {"X-NCP-APIGW-API-KEY-ID": client_id, "X-NCP-APIGW-API-KEY": client_secret,
                "Content-Type": "application/json"}
     r = requests.post(DATALAB_URL, headers=headers, data=json.dumps(body), timeout=30)
     r.raise_for_status()
@@ -25,7 +26,7 @@ def fetch_datalab(keywords, end_date, client_id, client_secret, days=FETCH_DAYS)
 def load_datalab_csv(path):
     """데이터랩 웹사이트에서 내려받은 CSV로 대신할 때 (API 키가 없을 때)"""
     raw = pd.read_csv(path, skiprows=6, header=None, names=["date", "ratio"], encoding="utf-8")
-    raw["date"] = pd.to_datetime(raw["date"], errors="coerce")
+    raw["date"] = pd.to_datetime(raw["date"].astype(str).str.strip().str.replace(".", "-", regex=False), format="%Y-%m-%d", errors="coerce")
     raw = raw.dropna(subset=["date"])
     s = raw.set_index("date")["ratio"].astype(float)
     return s.reindex(pd.date_range(s.index.min(), s.index.max()), fill_value=0.0)

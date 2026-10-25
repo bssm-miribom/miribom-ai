@@ -17,6 +17,9 @@ src/miribom_ai/
     demo_data.py   연습용 가짜 데이터
     features.py    특징·정답 만들기 (판정일 07시 전 정보만)
     metrics.py     MAE, WAPE, 범위 적중률
+    collect_visitors.py  구·군별 일별 방문자 수 수집 (공공데이터포털)
+    collect_search.py    구·군별 데이터랩 검색 지수 수집
+    build_table.py       두 자료 + 공휴일 → data/scale_table.csv
     train.py       학습 + 기준 모델 비교 + 모델 저장
     predict.py     학습된 모델로 D+1~3 방문객 범위 예측
   intent/     방문 의도 분류 (KcELECTRA 미세조정)
@@ -64,6 +67,16 @@ python3 -m miribom_ai.scale.train --demo                      # 규모 예측 �
 python3 -m miribom_ai.scale.train                             # data/scale_table.csv로 실제 학습 → models/
 python3 -m miribom_ai.intent.train data/intent_labels.csv     # 방문 의도 분류 학습 → models/intent/
 python3 -m miribom_ai.pipeline.run_daily --demo               # 하루 판정 전체 흐름 시험
+```
+
+## 규모 예측 실제 학습 순서
+```
+export TOUR_SERVICE_KEY=...        # 공공데이터포털 '한국관광공사_빅데이터_지역별 방문자수_GW' 인증키
+export NAVER_CLIENT_ID=... NAVER_CLIENT_SECRET=...
+python3 -m miribom_ai.scale.collect_visitors 2024-01-01 2026-10-20
+python3 -m miribom_ai.scale.collect_search 2024-01-01 2026-10-20   # 검색어는 data/area_keywords.csv
+python3 -m miribom_ai.scale.build_table
+python3 -m miribom_ai.scale.train
 ```
 
 ## 학습 데이터 형식

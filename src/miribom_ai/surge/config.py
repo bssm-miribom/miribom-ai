@@ -4,4 +4,4 @@ TOP_PCT = 1.0           # 지난 1년 상위 몇 % (0.5·1·2% 비교)
 CONSEC_DAYS = 2         # 연속 일수 (1·2·3일 비교)
 HISTORY_DAYS = 365      # 비교할 과거 기간
 FETCH_DAYS = HISTORY_DAYS + BASELINE_WEEKS * 7 + 14  # 한 번에 받아올 기간
-DATALAB_URL = "https://openapi.naver.com/v1/datalab/search"  # API HUB 주소가 다르면 바꿈 [팀 확인]
+DATALAB_URL = "https://naverapihub.apigw.ntruss.com/search-trend/v1/search"  # NAVER API HUB 검색어트렌드 (2026-10 기준)

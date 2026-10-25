@@ -29,8 +29,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--table", default=str(ROOT / "data" / "scale_table.csv"))
-    ap.add_argument("--val-start", help="검증 기간 시작일 (기본: 뒤에서 30% 지점)")
-    ap.add_argument("--test-start", help="평가 기간 시작일 (기본: 뒤에서 15% 지점)")
+    ap.add_argument("--val-start", help="검증 기간 시작일 (기본: 뒤에서 30%% 지점)")
+    ap.add_argument("--test-start", help="평가 기간 시작일 (기본: 뒤에서 15%% 지점)")
     ap.add_argument("--exclude", default="2026-09-10:2026-10-05", help="학습·검증에서 뺄 평가 전용 기간 (부캉이)")
     a = ap.parse_args(argv)
 
