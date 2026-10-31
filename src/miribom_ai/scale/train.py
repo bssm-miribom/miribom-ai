@@ -32,6 +32,8 @@ def main(argv=None):
     ap.add_argument("--table", default=str(ROOT / "data" / "scale_table.csv"))
     ap.add_argument("--val-start", help="검증 기간 시작일 (기본: 뒤에서 30%% 지점)")
     ap.add_argument("--test-start", help="평가 기간 시작일 (기본: 뒤에서 15%% 지점)")
+    ap.add_argument("--mode", choices=["multiply", "learned"], default="multiply",
+                    help="multiply: 평소 수준 모델 × 검색 급증 배수(비례 가정) / learned: 관심도 특징까지 넣은 모델을 그대로 씀")
     ap.add_argument("--exclude", default="2026-09-10:2026-10-05", help="학습·검증에서 뺄 평가 전용 기간 (부캉이)")
     a = ap.parse_args(argv)
 
@@ -103,9 +105,11 @@ def main(argv=None):
                 r = metrics(y_te[mask], None if l is None else l[mask], m[mask], None if u is None else u[mask])
                 rows.append({"예측": f"D+{h}", "모델": name, "구간": part, "일수": int(mask.sum()), **r})
 
-        for q in QUANTILES:                                    # 운영용 = 평소 수준 모델 (관심도 뺌). 급증은 predict에서 곱함
-            saved[(h, q, len(cal))].booster_.save_model(str(mdir / f"scale_h{h}_q{int(q*100)}.txt"))
-        json.dump({"features": cal, "quantiles": QUANTILES, "surge": "multiply", "surge_elasticity": SURGE_ELASTICITY},
+        op = cal if a.mode == "multiply" else full             # multiply면 급증은 predict에서 곱함
+        for q in QUANTILES:
+            saved[(h, q, len(op))].booster_.save_model(str(mdir / f"scale_h{h}_q{int(q*100)}.txt"))
+        json.dump({"features": op, "quantiles": QUANTILES, "surge": a.mode,
+                   "surge_elasticity": SURGE_ELASTICITY if a.mode == "multiply" else None},
                   open(mdir / f"scale_h{h}_meta.json", "w"), ensure_ascii=False, indent=1)
 
     res = pd.DataFrame(rows)

@@ -20,9 +20,9 @@ def build(df):
         for t in ("rest", "work"):
             m = g["dtype"] == t
             base_si[m] = si.where(m).shift(1).rolling(56, min_periods=10).median()[m]
-        g["ratio"] = si / base_si
+        g["ratio"] = si / base_si.where(base_si > 0)          # 평소 검색량이 0이면 배수를 못 냄 (무한대 방지)
         g["ratio_max3"] = g["ratio"].rolling(3).max()
-        g["ratio_growth3"] = g["ratio"] / g["ratio"].shift(3)
+        g["ratio_growth3"] = (g["ratio"] / g["ratio"].shift(3)).replace([np.inf, -np.inf], np.nan)
         g["intent_growth3"] = (g["intent_posts"] + 1) / (g["intent_posts"].shift(3) + 1)
         g["prev_visitors"] = g["visitors"]                  # 기준 모델(전날 값)용. 모델 입력에는 안 씀
         # 평소 방문객: 28~84일 전 같은 날 유형 중앙값 (최근 실측은 아직 공개 안 됐다고 봄)
