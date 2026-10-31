@@ -21,8 +21,15 @@ def judge(pred, place):
     for h, p in pred.items():
         mid, hi = density(p["중앙값"], place), density(p["상위90"], place)
         dens[p["날짜"]] = {"중앙값": round(mid, 2), "상위90": round(hi, 2)}
+        if p.get("최악") is not None:   # 최악 시나리오 밀집도: 참고로만 보여주고 단계에는 안 씀
+            dens[p["날짜"]]["최악"] = round(density(p["최악"], place), 2)
         if mid > LIMIT and best < 3:
             best, why = 3, f"{p['날짜']} 예측 중앙값 밀집도 {mid:.1f}명/㎡ > {LIMIT:g}"
         elif hi > LIMIT and best < 2:
             best, why = 2, f"{p['날짜']} 예측 범위 상단 밀집도 {hi:.1f}명/㎡ > {LIMIT:g}"
-    return {"단계": f"{best}단계", "이유": why, "밀집도": dens}
+    worst = [(d, v["최악"]) for d, v in dens.items() if v.get("최악") is not None and v["최악"] > LIMIT]
+    out = {"단계": f"{best}단계", "이유": why, "밀집도": dens}
+    if worst:   # 단계는 그대로 두고 참고 문장만 붙임
+        d, v = max(worst, key=lambda x: x[1])
+        out["최악 시나리오"] = f"검색이 늘어난 만큼 방문도 늘면 {d} 밀집도 {v:.1f}명/㎡ (실측으로 확인 안 된 가정)"
+    return out

@@ -5,6 +5,19 @@
   "rest_h2",
   "run_h2",
   "to_rest_h2",
+  "log_base",
+  "ratio",
+  "ratio_max3",
+  "ratio_growth3",
+  "intent_posts",
+  "intent_growth3"
+ ],
+ "cal_features": [
+  "dow_h2",
+  "hol_h2",
+  "rest_h2",
+  "run_h2",
+  "to_rest_h2",
   "log_base"
  ],
  "quantiles": [
@@ -12,6 +25,6 @@
   0.5,
   0.9
  ],
- "surge": "multiply",
+ "worst_case": "cal_q90 x search_ratio ** surge_elasticity",
  "surge_elasticity": 1.0
 }

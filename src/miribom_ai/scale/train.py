@@ -29,11 +29,10 @@ from miribom_ai.paths import ROOT
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true")
-    ap.add_argument("--table", default=str(ROOT / "data" / "scale_table.csv"))
+    ap.add_argument("--table", default=str(ROOT / "data" / "place_table.csv"),
+                    help="학습 표. 기본은 장소 단위(build_place_table). 구·군 단위는 data/scale_table.csv")
     ap.add_argument("--val-start", help="검증 기간 시작일 (기본: 뒤에서 30%% 지점)")
     ap.add_argument("--test-start", help="평가 기간 시작일 (기본: 뒤에서 15%% 지점)")
-    ap.add_argument("--mode", choices=["multiply", "learned"], default="multiply",
-                    help="multiply: 평소 수준 모델 × 검색 급증 배수(비례 가정) / learned: 관심도 특징까지 넣은 모델을 그대로 씀")
     ap.add_argument("--exclude", default="2026-09-10:2026-10-05", help="학습·검증에서 뺄 평가 전용 기간 (부캉이)")
     a = ap.parse_args(argv)
 
@@ -82,7 +81,7 @@ def main(argv=None):
         lo, mid, hi = fit_pred(full)
         cal = features(h, d.columns, with_interest=False)
         nol, nom, noh = fit_pred(cal)
-        # 운영 방식: 1단계(급증) 판정된 날만 평소 수준 모델 × 검색 급증 배수(비례 가정)
+        # 최악 시나리오(참고): 1단계(급증) 판정된 날만 평소 수준 모델 × 검색 급증 배수(비례 가정)
         # 1단계 근사: 그날과 전날 배수가 모두 지난 1년 상위 1% 이상 (surge.detect 기준과 같은 뜻)
         flag = te["flag"].to_numpy(dtype=bool)
         sm = np.where(flag, surge_mult(te["ratio"].to_numpy()), 1.0)
@@ -96,8 +95,8 @@ def main(argv=None):
         rf.fit(tr[full].fillna(-1), tr["y"])
         rfp = base_te * np.exp(rf.predict(te[full].fillna(-1)))
 
-        for name, (l, m, u) in {"LightGBM (관심도 포함)": (lo, mid, hi), "LightGBM (관심도 뺌)": (nol, nom, noh),
-                                "평소 모델 × 검색 배수 (운영)": (pml, pmm, pmh),
+        for name, (l, m, u) in {"LightGBM (관심도 포함, 운영)": (lo, mid, hi), "LightGBM (관심도 뺌)": (nol, nom, noh),
+                                "최악 시나리오: 평소 모델 × 검색 배수": (pml, pmm, pmh),
                                 "랜덤포레스트": (None, rfp, None), "기준: 전날 값": (None, prev, None),
                                 "기준: 요일·휴일 평균": (None, seas, None)}.items():
             for part, mask in (("전체", np.ones_like(surge)), ("급증일", surge), ("1단계 판정일", flag)):
@@ -105,11 +104,14 @@ def main(argv=None):
                 r = metrics(y_te[mask], None if l is None else l[mask], m[mask], None if u is None else u[mask])
                 rows.append({"예측": f"D+{h}", "모델": name, "구간": part, "일수": int(mask.sum()), **r})
 
-        op = cal if a.mode == "multiply" else full             # multiply면 급증은 predict에서 곱함
+        # 운영 모델 2개 저장
+        #  scale_h*_q*      실측 학습 모델 (관심도 포함) → 경보 단계는 이것으로 정함
+        #  scale_h*_cal_q*  평소 수준 모델 (관심도 뺌) → × 검색 급증 배수(비례 가정) = 최악 시나리오 (참고용)
         for q in QUANTILES:
-            saved[(h, q, len(op))].booster_.save_model(str(mdir / f"scale_h{h}_q{int(q*100)}.txt"))
-        json.dump({"features": op, "quantiles": QUANTILES, "surge": a.mode,
-                   "surge_elasticity": SURGE_ELASTICITY if a.mode == "multiply" else None},
+            saved[(h, q, len(full))].booster_.save_model(str(mdir / f"scale_h{h}_q{int(q*100)}.txt"))
+            saved[(h, q, len(cal))].booster_.save_model(str(mdir / f"scale_h{h}_cal_q{int(q*100)}.txt"))
+        json.dump({"features": full, "cal_features": cal, "quantiles": QUANTILES,
+                   "worst_case": "cal_q90 x search_ratio ** surge_elasticity", "surge_elasticity": SURGE_ELASTICITY},
                   open(mdir / f"scale_h{h}_meta.json", "w"), ensure_ascii=False, indent=1)
 
     res = pd.DataFrame(rows)

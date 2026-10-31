@@ -21,7 +21,10 @@ def load_models():
         for h in HORIZONS:
             meta = json.load(open(MODEL_DIR / f"scale_h{h}_meta.json"))
             boosters = {q: lgb.Booster(model_file=str(MODEL_DIR / f"scale_h{h}_q{int(q*100)}.txt")) for q in QUANTILES}
-            _cache[h] = (meta["features"], boosters)
+            cal = None
+            if meta.get("cal_features") and (MODEL_DIR / f"scale_h{h}_cal_q90.txt").exists():
+                cal = (meta["cal_features"], lgb.Booster(model_file=str(MODEL_DIR / f"scale_h{h}_cal_q90.txt")))
+            _cache[h] = (meta["features"], boosters, cal)
     return _cache
 
 def surge_mult(ratio, elasticity=SURGE_ELASTICITY):
@@ -60,8 +63,9 @@ def predict_place(search, base_date, holidays, base_rest, base_work, weather=Non
         row[k] = v
     out = {}
     s_lo, s_mid, s_hi = _surge_range(feat.loc[:base_date])
-    for h, (feats, boosters) in load_models().items():
-        multiply = not any(f in feats for f in ("ratio", "ratio_max3"))   # 예전 모델(관심도 포함)이면 곱하지 않음
+    for h, (feats, boosters, cal) in load_models().items():
+        # 예전(10-31 오전) 모델: 관심도 없는 평소 모델만 있으면 곱해서 씀. 지금 모델은 학습값 그대로 쓰고 곱셈은 최악 시나리오에만
+        multiply = cal is None and not any(f in feats for f in ("ratio", "ratio_max3"))
         base = base_rest if row[f"rest_h{h}"] == 1 else base_work
         row["log_base"] = np.log(base)
         x = pd.DataFrame([[row.get(f, np.nan) for f in feats]], columns=feats).astype(float)
@@ -71,4 +75,8 @@ def predict_place(search, base_date, holidays, base_rest, base_work, weather=Non
             lo, mid, hi = lo * s_lo, mid * s_mid, hi * s_hi
         out[h] = {"날짜": str((base_date + pd.Timedelta(days=h + 1)).date()),
                   "하위10": round(lo), "중앙값": round(mid), "상위90": round(hi)}
+        if cal is not None:   # 최악 시나리오: 검색이 N배면 방문도 N배 (실측과 안 맞는 가정이라 단계 판정에는 안 씀)
+            cf, cb = cal
+            xc = pd.DataFrame([[row.get(f, np.nan) for f in cf]], columns=cf).astype(float)
+            out[h]["최악"] = round(max(hi, base * float(np.exp(cb.predict(xc)[0])) * s_hi))
     return out, row
