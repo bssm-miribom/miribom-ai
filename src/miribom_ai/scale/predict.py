@@ -33,13 +33,13 @@ def _surge_range(feat):
     """하위·중앙·상위에 곱할 급증 배수 (D-1 기준)
     하위: 최근 3일 중 가장 낮은 배수 (관심이 식는 경우)
     중앙: D-1 배수가 이어지는 경우
-    상위: D-1 하루 증가 속도가 하루 더 이어지는 경우"""
+    상위: 최근 7일 중 가장 높았던 관심 수준이 다시 오는 경우 (증가 속도로 늘려 잡으면 첫날 급증에서 수천 배가 됨)"""
     r = feat["ratio"].dropna()
     if r.empty:
         return 1.0, 1.0, 1.0
     last = float(r.iloc[-1])
     lo = float(r.iloc[-3:].min())
-    up = last * max(1.0, last / float(r.iloc[-2])) if len(r) >= 2 and r.iloc[-2] > 0 else last
+    up = max(last, float(r.iloc[-7:].max()))
     return tuple(float(surge_mult(x)) for x in (lo, last, up))
 
 def models_ready():
