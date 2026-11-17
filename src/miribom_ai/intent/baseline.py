@@ -15,6 +15,7 @@ def predict(texts):
 def report(y, p, name):
     print(f"{name}: F1 {f1_score(y, p):.3f} / 정밀도 {precision_score(y, p, zero_division=0):.3f}"
           f" / 재현율 {recall_score(y, p):.3f} ({len(y)}건)")
+    return round(float(f1_score(y, p)), 3)
 
 if __name__ == "__main__":
     _, _, te = split(load(sys.argv[1] if len(sys.argv) > 1 else "data/intent_labels.csv"))

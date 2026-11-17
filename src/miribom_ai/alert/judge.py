@@ -16,7 +16,8 @@ def judge(pred, place):
     need = ("bottleneck_m2", "peak_share", "bottleneck_share")
     missing = [k for k in need if k not in place or place[k] is None or (isinstance(place[k], float) and math.isnan(place[k]))]
     if missing:
-        return {"단계": "판정 보류", "이유": "병목 구간 정보 없음: " + ", ".join(missing), "밀집도": None}
+        return {"단계": "판정 보류", "이유": "병목 구간 정보 없음: " + ", ".join(missing), "밀집도": None,
+                "빠진 값": missing}
     best, why, dens = 1, "예측 범위 상단도 1㎡당 5명 이하", {}
     for h, p in pred.items():
         mid, hi = density(p["중앙값"], place), density(p["상위90"], place)

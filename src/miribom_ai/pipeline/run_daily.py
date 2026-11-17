@@ -39,6 +39,15 @@ def intent_series(place):
     c = c[c["place"] == place]
     return c.groupby("date")["intent_posts"].sum() if len(c) else None
 
+def intent_summary(series, base):
+    """자료 기준일(D-1) 가볼래 글 수와 평소(직전 28일 중앙값) 대비 배수. 자료 없으면 None"""
+    if series is None or base not in series.index:
+        return None
+    prev = series[(series.index < base) & (series.index >= base - pd.Timedelta(days=28))]
+    med = float(prev.median()) if len(prev) else float("nan")
+    return {"어제 글 수": int(series[base]),
+            "평소 대비": round(float(series[base]) / med, 2) if med and med > 0 else None}
+
 def nan_to_none(x):
     if isinstance(x, dict): return {k: nan_to_none(v) for k, v in x.items()}
     if isinstance(x, list): return [nan_to_none(v) for v in x]
@@ -74,14 +83,19 @@ def run(judge_day=None, demo=False, save=True):
             s = fake_search(p["place"], base) if demo else fetch_datalab(p["keywords"].split("|")[:20], base, cid, cs)
             sj = judge_surge(surge_ratio(s), base)
             r["급증"] = sj
+            intent = intent_series(p["place"])
+            if intent is not None:
+                intent = intent[intent.index <= base]             # 판정일 이후 글은 쓰지 않음 (누수 방지)
+            r["의도"] = intent_summary(intent, base)
             if sj["판정"] != "1단계" and int(p.get("force_watch", 0) or 0) != 1:
                 r["단계"], r["이유"] = "평상", sj.get("이유", "-")
                 results.append(r); continue
             if pd.isna(p["base_rest"]) or pd.isna(p["base_work"]):
                 r["단계"], r["이유"] = "판정 보류", "평소 방문객 값 없음 (places.csv)"
+                r["빠진 값"] = [k for k in ("base_rest", "base_work") if pd.isna(p[k])]
                 results.append(r); continue
             weather, wsrc = forecast(p["lat"], p["lon"], judge_day)
-            pred, _ = scale.predict_place(s, base, hol, p["base_rest"], p["base_work"], weather, intent_series(p["place"]))
+            pred, _ = scale.predict_place(s, base, hol, p["base_rest"], p["base_work"], weather, intent)
             r["예측"], r["날씨 출처"] = pred, wsrc
             r.update(judge_alert(pred, p.to_dict()))
         except Exception as e:                                    # 한 곳이 실패해도 나머지는 계속

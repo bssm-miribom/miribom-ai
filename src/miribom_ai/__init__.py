@@ -10,6 +10,8 @@
     miribom_ai.predict_place(search, base_date, holidays, base_rest, base_work)  규모 예측
     miribom_ai.judge_alert(pred, place_dict)                                     경보 단계
     miribom_ai.count_intent(posts_df)                                            방문 의도 분류 (torch 필요)
+    miribom_ai.label_texts(["…"])                                                 문장별 의도 분류 (시연용)
+    miribom_ai.model_status()                                                     모델 상태 요약
 """
 import importlib
 
@@ -24,6 +26,7 @@ _LAZY = {
     "predict_place": ("miribom_ai.scale.predict", "predict_place"),
     "judge_alert": ("miribom_ai.alert.judge", "judge"),
     "LIMIT": ("miribom_ai.alert.judge", "LIMIT"),
+    "model_status": ("miribom_ai.status", "model_status"),
 }
 
 def __getattr__(name):
@@ -37,4 +40,14 @@ def count_intent(posts):
     from miribom_ai.intent.predict import daily_counts
     return daily_counts(posts)
 
-__all__ = list(_LAZY) + ["count_intent"]
+def collect_intent(day=None):
+    """어제 Threads 글 → 장소별 가볼래 글 수를 data/intent_counts.csv에 저장. torch·Threads 토큰 필요"""
+    from miribom_ai.intent.daily import run
+    return run(day)
+
+def label_texts(texts):
+    """문장 → [{"label": "가볼래"|"그냥 언급", "score": 확률}]. torch·transformers가 필요함"""
+    from miribom_ai.intent.predict import label_texts as f
+    return f(texts)
+
+__all__ = list(_LAZY) + ["count_intent", "collect_intent", "label_texts"]

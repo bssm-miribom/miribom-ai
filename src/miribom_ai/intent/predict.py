@@ -6,22 +6,40 @@ import sys, json
 from pathlib import Path
 import pandas as pd, torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from miribom_ai.intent.config import MAX_LEN
+from miribom_ai.intent.config import MAX_LEN, LABELS
 from miribom_ai.intent.data import clean
 
 from miribom_ai.paths import ROOT
 MODEL_DIR = ROOT / "models" / "intent"
 
+_cache = {}
+
+def _load():
+    """모델은 한 번만 불러와 메모리에 둠 (서버에서 여러 번 부를 때)"""
+    if not _cache:
+        _cache["tok"] = AutoTokenizer.from_pretrained(MODEL_DIR)
+        _cache["model"] = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR).eval()
+        _cache["th"] = json.load(open(MODEL_DIR / "threshold.json"))["threshold"]
+    return _cache["tok"], _cache["model"], _cache["th"]
+
 @torch.no_grad()
-def classify(texts):
-    tok = AutoTokenizer.from_pretrained(MODEL_DIR)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR).eval()
-    th = json.load(open(MODEL_DIR / "threshold.json"))["threshold"]
+def proba(texts):
+    """글마다 '가볼래' 확률"""
+    tok, model, _ = _load()
     out = []
     for i in range(0, len(texts), 64):
         enc = tok(texts[i:i + 64], truncation=True, max_length=MAX_LEN, padding=True, return_tensors="pt")
-        out += (torch.softmax(model(**enc).logits, -1)[:, 1] >= th).int().tolist()
+        out += torch.softmax(model(**enc).logits, -1)[:, 1].tolist()
     return out
+
+def classify(texts):
+    th = _load()[2]
+    return [int(p >= th) for p in proba(texts)]
+
+def label_texts(texts):
+    """서버 시연용: [{"label": "가볼래"|"그냥 언급", "score": 확률}]. 입력 문장은 저장하지 않음"""
+    th = _load()[2]
+    return [{"label": LABELS[int(p >= th)], "score": round(p, 3)} for p in proba([clean(t) for t in texts])]
 
 def daily_counts(posts):
     posts = posts.assign(intent=classify(posts["text"].map(clean).tolist()))

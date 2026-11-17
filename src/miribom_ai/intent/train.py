@@ -6,7 +6,7 @@
 """
 import sys, json
 from pathlib import Path
-import numpy as np, torch
+import numpy as np, pandas as pd, torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 from sklearn.metrics import f1_score
@@ -57,9 +57,13 @@ def main(path):
     model = AutoModelForSequenceClassification.from_pretrained(OUT).to(DEVICE)
     th = best_threshold(va["label"].to_numpy(), probs(model, dl_va))
     p_te = (probs(model, dl_te) >= th).astype(int)
-    baseline.report(te["label"].tolist(), p_te.tolist(), f"KcELECTRA (평가, 기준값 {th:.2f})")
-    baseline.report(te["label"].tolist(), baseline.predict(te["text"]), "키워드 규칙 (평가)")
-    json.dump({"threshold": th, "model": MODEL_NAME}, open(OUT / "threshold.json", "w"))
+    f1 = baseline.report(te["label"].tolist(), p_te.tolist(), f"KcELECTRA (평가, 기준값 {th:.2f})")
+    kw = baseline.report(te["label"].tolist(), baseline.predict(te["text"]), "키워드 규칙 (평가)")
+    # 서버 /admin/models 가 읽는 값 (모델 상태 카드)
+    json.dump({"threshold": th, "model": MODEL_NAME, "f1": f1, "keyword_f1": kw,
+               "n_train": len(tr), "n_test": len(te), "trained_at": str(pd.Timestamp.now(tz="Asia/Seoul").date()),
+               "labelers": sorted(set(tr.get("labeler", pd.Series(dtype=str)).dropna()))},
+              open(OUT / "threshold.json", "w"), ensure_ascii=False)
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "data" / "intent_labels.csv"))
