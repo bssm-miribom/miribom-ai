@@ -1,12 +1,16 @@
 """경보 판정 (규칙): 예측 방문객 → 병목 구간 밀집도(명/㎡) → 1·2·3단계, 판정 보류
 
 밀집도 = 하루 방문객 × 피크 1시간 비중 × 병목 통과 비율 ÷ 병목 면적
-  피크 1시간 비중: 도시철도 시간대별 승하차로 구함 [팀 확인]
+  피크 1시간 비중: 도시철도 시간대별 하차, 휴일 하루 중 가장 붐빈 1시간 비중의 상위 10% 값 (2024-01~2026-09)
   병목 통과 비율: 현장 확인 전에는 추정치 [팀 확인]
 """
 import math
 
 LIMIT = 5.0   # 1㎡당 5명 [팀 확인: 출처 표기]
+# 최악 시나리오(검색이 N배면 방문도 N배)가 기준을 넘으면 2단계 (2026-11-17)
+# 도시철도 하차 실측으로는 급증이 거의 안 잡혀 실측 모델만으로는 2단계가 안 나옴.
+# 2025-01~2026-10 장소 5곳 되돌려 보기: 최악 > 5명/㎡는 부캉이(2026-09-19~) 때만, 다른 곳 0건
+WORST_STAGE2 = True
 
 def density(visitors, place):
     return visitors * place["peak_share"] * place["bottleneck_share"] / place["bottleneck_m2"]
@@ -26,11 +30,14 @@ def judge(pred, place):
             dens[p["날짜"]]["최악"] = round(density(p["최악"], place), 2)
         if mid > LIMIT and best < 3:
             best, why = 3, f"{p['날짜']} 예측 중앙값 밀집도 {mid:.1f}명/㎡ > {LIMIT:g}"
-        elif hi > LIMIT and best < 2:
+        elif hi > LIMIT and best < 2:   # 실측 모델 범위 상단
             best, why = 2, f"{p['날짜']} 예측 범위 상단 밀집도 {hi:.1f}명/㎡ > {LIMIT:g}"
     worst = [(d, v["최악"]) for d, v in dens.items() if v.get("최악") is not None and v["최악"] > LIMIT]
-    out = {"단계": f"{best}단계", "이유": why, "밀집도": dens}
-    if worst:   # 단계는 그대로 두고 참고 문장만 붙임
+    if worst:
         d, v = max(worst, key=lambda x: x[1])
+        if WORST_STAGE2 and best < 2:
+            best, why = 2, f"최악 시나리오 {d} 밀집도 {v:.1f}명/㎡ > {LIMIT:g} (검색 급증만큼 방문도 늘 경우)"
+    out = {"단계": f"{best}단계", "이유": why, "밀집도": dens}
+    if worst:
         out["최악 시나리오"] = f"검색이 늘어난 만큼 방문도 늘면 {d} 밀집도 {v:.1f}명/㎡ (실측으로 확인 안 된 가정)"
     return out
