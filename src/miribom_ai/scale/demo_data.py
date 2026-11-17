@@ -1,6 +1,5 @@
 """학습 연습용 가짜 데이터 (실제 값 아님)"""
 import numpy as np, pandas as pd
-from miribom_ai.scale.config import HORIZONS
 
 def make_demo(seed=0):
     rng = np.random.default_rng(seed)
@@ -22,14 +21,9 @@ def make_demo(seed=0):
         for i, d in enumerate(dates):
             h = int(d in hol); wk = d.dayofweek >= 5
             summer = 1 + (1.5 if beach and d.month in (7, 8) else 0)
-            rain = rng.uniform(0, 100) if rng.random() < 0.3 else rng.uniform(0, 20)
-            v = base * (1.3 if wk else 1) * (1.6 if h else 1) * summer * mult[i] * (1 - 0.004 * rain)
+            v = base * (1.3 if wk else 1) * (1.6 if h else 1) * summer * mult[i]
             rows.append(dict(date=d, area=f"지역{k:02d}", visitors=max(0, v * rng.lognormal(0, 0.12)),
                              search_index=sidx[i] * (1.2 if wk else 1) * summer * rng.lognormal(0, 0.1),
-                             holiday=h, rain=rain, tmax=20 + 10 * np.sin((d.dayofyear - 100) / 58)))
-    df = pd.DataFrame(rows)
-    for h in HORIZONS:                                       # 예보 흉내: 실제 값에 오차를 더함
-        df[f"rain_h{h}"] = df.groupby("area")["rain"].shift(-(h + 1)) + rng.normal(0, 10 * h, len(df))
-        df[f"tmax_h{h}"] = df.groupby("area")["tmax"].shift(-(h + 1)) + rng.normal(0, 1.5 * h, len(df))
-    return df.drop(columns=["rain", "tmax"])
+                             holiday=h))
+    return pd.DataFrame(rows)
 
