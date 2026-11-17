@@ -24,7 +24,7 @@ def load_models():
             cal = None
             if meta.get("cal_features") and (MODEL_DIR / f"scale_h{h}_cal_q90.txt").exists():
                 cal = (meta["cal_features"], lgb.Booster(model_file=str(MODEL_DIR / f"scale_h{h}_cal_q90.txt")))
-            _cache[h] = (meta["features"], boosters, cal)
+            _cache[h] = (meta["features"], boosters, cal, float((meta.get("interval_cal") or {}).get("c", 0.0)))
     return _cache
 
 def surge_mult(ratio, elasticity=SURGE_ELASTICITY):
@@ -61,7 +61,7 @@ def predict_place(search, base_date, holidays, base_rest, base_work, intent=None
     row = feat.loc[base_date].copy()
     out = {}
     s_lo, s_mid, s_hi = _surge_range(feat.loc[:base_date])
-    for h, (feats, boosters, cal) in load_models().items():
+    for h, (feats, boosters, cal, c) in load_models().items():
         # 예전(10-31 오전) 모델: 관심도 없는 평소 모델만 있으면 곱해서 씀. 지금 모델은 학습값 그대로 쓰고 곱셈은 최악 시나리오에만
         multiply = cal is None and not any(f in feats for f in ("ratio", "ratio_max3"))
         base = base_rest if row[f"rest_h{h}"] == 1 else base_work
@@ -69,11 +69,15 @@ def predict_place(search, base_date, holidays, base_rest, base_work, intent=None
         x = pd.DataFrame([[row.get(f, np.nan) for f in feats]], columns=feats).astype(float)
         p = {q: float(base * np.exp(b.predict(x)[0])) for q, b in boosters.items()}
         lo, mid, hi = min(p[0.1], p[0.5]), p[0.5], max(p[0.9], p[0.5])
+        # 범위 보정(scale/calibrate.py): 검증 기간 잔차로 구한 계수만큼 하위10·상위90을 넓힘. 중앙값은 그대로
+        lo, hi = lo * np.exp(-c), hi * np.exp(c)
         if multiply:
             lo, mid, hi = lo * s_lo, mid * s_mid, hi * s_hi
         out[h] = {"날짜": str((base_date + pd.Timedelta(days=h + 1)).date()),
                   "하위10": round(lo), "중앙값": round(mid), "상위90": round(hi)}
-        if cal is not None:   # 최악 시나리오: 검색이 N배면 방문도 N배 (실측과 안 맞는 가정이라 단계 판정에는 안 씀)
+        # 최악 시나리오: 평소 수준 모델 상위90 × 최근 7일 최대 검색 배수 ** SURGE_ELASTICITY (검색이 N배면 방문도 N배인 가정)
+        # 실측 모델(위 하위10~상위90)과 별도로, 이 값의 밀집도가 5명/㎡를 넘으면 2단계 (alert/judge.py WORST_STAGE2)
+        if cal is not None:
             cf, cb = cal
             xc = pd.DataFrame([[row.get(f, np.nan) for f in cf]], columns=cf).astype(float)
             out[h]["최악"] = round(max(hi, base * float(np.exp(cb.predict(xc)[0])) * s_hi))

@@ -25,6 +25,16 @@
   0.5,
   0.9
  ],
- "worst_case": "cal_q90 x search_ratio ** surge_elasticity",
- "surge_elasticity": 1.0
+ "worst_case": "max(q90, cal_q90 x 최근 7일 최대 검색 배수 ** surge_elasticity). 밀집도 > 5명/㎡면 2단계 (alert.judge.WORST_STAGE2)",
+ "surge_elasticity": 1.0,
+ "interval_cal": {
+  "c": 0.017419,
+  "coverage": 0.8,
+  "method": "CQR, log ratio",
+  "val": [
+   "2025-12-03",
+   "2026-05-03"
+  ],
+  "n_val": 2664
+ }
 }
