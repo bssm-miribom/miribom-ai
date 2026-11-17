@@ -64,6 +64,7 @@ python3 -m miribom_ai.surge.replay --fake --plot              # 급증 탐지 �
 python3 -m miribom_ai.surge.replay --csv 데이터랩.csv --plot   # 웹 CSV로 부캉이 재현
 python3 -m miribom_ai.scale.train --demo                      # 규모 예측 학습 연습 (가짜 데이터)
 python3 -m miribom_ai.scale.train                             # data/scale_table.csv로 실제 학습 → models/
+python3 -m miribom_ai.scale.calibrate                         # 예측 범위 보정 계수 → models/scale_h*_meta.json
 python3 -m miribom_ai.intent.train data/intent_labels.csv     # 방문 의도 분류 학습 → models/intent/
 python3 -m miribom_ai.pipeline.run_daily --demo               # 하루 판정 전체 흐름 시험
 ```
@@ -81,8 +82,10 @@ python3 -m miribom_ai.scale.train
 ## 규모 예측 구조 (2026-10-31 변경)
 - 학습 자료: 장소 단위 표 `data/place_table.csv` (`python3 -m miribom_ai.scale.build_place_table`). 장소 18곳의 데이터랩 검색 지수 + 가까운 도시철도역 하차 인원(부산교통공사, data.go.kr 3057229)을 방문객 대리 지표로 씀. 구·군 표(`data/scale_table.csv`)는 `--table`로 계속 쓸 수 있음
 - 경보 단계: 실측으로 학습한 LightGBM(요일·휴일·연휴·검색 급증 배수·가볼래 글 수) 예측으로 정함. D+1 WAPE 7.7% (요일·휴일 평균 8.9%, 전날 값 17.3%)
-- 최악 시나리오(참고): 평소 수준 모델 상위 90% × 검색 급증 배수 ** `SURGE_ELASTICITY`(1.0, 비례 가정). 결과에 `최악`, 밀집도 `최악`, 5명/㎡를 넘으면 `최악 시나리오` 문장이 붙음. 단계에는 안 씀
-- 비례 가정을 단계에 안 쓰는 이유: 장소 검색 1단계 판정일 다음 날 역 하차 인원은 거의 그대로였음(탄력성 추정 ≈ 0). 비례 가정을 쓰면 이런 날 오차가 2,000% 넘음 (`results/scale_metrics.csv`의 '1단계 판정일')
+- 단계 규칙(`alert/judge.py`, 기준 5명/㎡): 3단계 = 실측 모델 중앙값 밀집도 > 5 / 2단계 = 실측 모델 상위90 밀집도 > 5, 또는 최악 시나리오 밀집도 > 5 / 1단계 = 급증 탐지 1단계인데 위에 해당 없음
+- 최악 시나리오: 평소 수준 모델 상위 90% × 최근 7일 최대 검색 급증 배수 ** `SURGE_ELASTICITY`(1.0, 비례 가정). 결과에 `최악`, 밀집도 `최악`, 5명/㎡를 넘으면 `최악 시나리오` 문장이 붙고 2단계가 됨 (`WORST_STAGE2`, 2026-11-17부터)
+- 예측 범위 보정(`scale/calibrate.py`, 재학습 없음): 검증 기간 잔차로 하위10·상위90을 e^±c배 넓힘(CQR). 계수는 `models/scale_h*_meta.json`의 `interval_cal`. 다시 학습하면 calibrate도 다시 실행
+- 비례 가정을 3단계·예측 중앙값에 안 쓰는 이유: 장소 검색 1단계 판정일 다음 날 역 하차 인원은 거의 그대로였음(탄력성 추정 ≈ 0). 비례 가정을 쓰면 이런 날 오차가 2,000% 넘음 (`results/scale_metrics.csv`의 '1단계 판정일'). 그래서 최악 시나리오는 2단계(대비 준비)까지만 올림
 - 한계: 역 하차 인원에는 출퇴근·환승객이 섞여 있어 방문 증가가 작게 보일 수 있음. 불꽃축제처럼 당일에 검색과 방문이 같이 뛰는 행사는 전날 자료로 못 맞힘(급증일 WAPE 약 55%). 부캉이 기간 중앙·부산역·초량 하차는 거의 변화 없음 → '하루 10만 명' 출처 확인 필요
 
 ## 학습 데이터 형식

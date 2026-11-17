@@ -7,7 +7,8 @@ PARAMS = dict(n_estimators=500, learning_rate=0.05, num_leaves=31, min_child_sam
               subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1)
 INTEREST = ["ratio", "ratio_max3", "ratio_growth3", "intent_posts", "intent_growth3"]
 
-# 급증 반영 (2단 구조): 예측 = 평소 수준 모델(요일·휴일) × 급증 배수 ** SURGE_ELASTICITY
+# 최악 시나리오 = 평소 수준 모델(요일·휴일) 상위90 × 검색 급증 배수 ** SURGE_ELASTICITY → 밀집도 > 5명/㎡면 2단계
+# (실측 모델 하위10~상위90·중앙값은 이 곱셈을 쓰지 않고 학습값 그대로임)
 # - 구·군 학습 자료에는 평소 2배를 넘은 날이 없어서(최대 1.8배) 트리 모델이 급증 규모를 배울 수 없음
 # - 1.0 = 비례 가정: 장소 검색이 평소의 N배면 방문도 평소의 N배. 학습값이 아닌 가정임 [팀 확인]
 # - 장소 단위 실측 사례(팝업·축제·촬영지 등)가 생기면 그 사례로 이 값을 추정해 바꿈 (부캉이는 평가 전용)
