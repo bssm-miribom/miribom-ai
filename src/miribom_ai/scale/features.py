@@ -50,7 +50,6 @@ def build(df):
 def features(h, cols, with_interest=True):
     # 지역 이름은 넣지 않음. 처음 보는 장소에도 쓰려고 평소 방문객 규모(log_base)로만 구분함
     f = [f"dow_h{h}", f"hol_h{h}", f"rest_h{h}", f"run_h{h}", f"to_rest_h{h}", "log_base"]
-    f += [c for c in (f"rain_h{h}", f"tmax_h{h}") if c in cols]
     if with_interest:
         f += [c for c in INTEREST if c in cols]
     return f
