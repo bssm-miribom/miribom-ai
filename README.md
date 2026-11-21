@@ -88,6 +88,9 @@ python3 -m miribom_ai.scale.train
 - 비례 가정을 3단계·예측 중앙값에 안 쓰는 이유: 장소 검색 1단계 판정일 다음 날 역 하차 인원은 거의 그대로였음(탄력성 추정 ≈ 0). 비례 가정을 쓰면 이런 날 오차가 2,000% 넘음 (`results/scale_metrics.csv`의 '1단계 판정일'). 그래서 최악 시나리오는 2단계(대비 준비)까지만 올림
 - 한계: 역 하차 인원에는 출퇴근·환승객이 섞여 있어 방문 증가가 작게 보일 수 있음. 불꽃축제처럼 당일에 검색과 방문이 같이 뛰는 행사는 전날 자료로 못 맞힘(급증일 WAPE 약 55%). 부캉이 기간 중앙·부산역·초량 하차는 거의 변화 없음 → '하루 10만 명' 출처 확인 필요
 
+## 평가
+- 기준값 고정, 여러 시점 평가, 시점 고정 되돌려 보기 결과와 한계: `docs/evaluation.md`
+
 ## 학습 데이터 형식
 - 규모 예측 `data/scale_table.csv`: date, area, visitors, search_index, holiday, (선택) intent_posts. 자세한 설명은 `scale/train.py` 맨 위
 - 방문 의도 `data/intent_labels.csv`: post_id, text, label(1 가볼래 / 0 그냥 언급 / 빈칸 보류), place, created_at, labeler
