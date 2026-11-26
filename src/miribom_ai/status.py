@@ -29,6 +29,12 @@ def _scale_metrics(path: Path):
                 out[key] = round(float(r["WAPE"]), 3)
                 if key == "d1_wape":
                     out["d1_coverage"] = round(float(r["범위적중률"]), 3)
+    cal = path.with_name(path.name.replace("scale_metrics", "interval_cal"))
+    if out and cal.exists():   # 범위 보정(scale/calibrate.py) 뒤 적중률이 있으면 그 값을 씀 (운영 예측에 보정이 들어가므로)
+        with open(cal, encoding="utf-8-sig") as f:
+            for r in csv.DictReader(f):
+                if r["예측"] == "D+1" and r["구간"] == "전체" and r[""] == "보정 후":
+                    out["d1_coverage"] = round(float(r["범위적중률"]), 3)
     return out or None
 
 

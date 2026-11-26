@@ -80,7 +80,7 @@ def main(argv=None):
         lo, mid, hi = fit_pred(full)
         cal = features(h, d.columns, with_interest=False)
         nol, nom, noh = fit_pred(cal)
-        # 최악 시나리오(참고): 1단계(급증) 판정된 날만 평소 수준 모델 × 검색 급증 배수(비례 가정)
+        # 최악 시나리오: 1단계(급증) 판정된 날만 평소 수준 모델 × 검색 급증 배수(비례 가정). 운영에서는 2단계 판정에 씀
         # 1단계 근사: 그날과 전날 배수가 모두 지난 1년 상위 1% 이상 (surge.detect 기준과 같은 뜻)
         flag = te["flag"].to_numpy(dtype=bool)
         sm = np.where(flag, surge_mult(te["ratio"].to_numpy()), 1.0)
@@ -105,12 +105,12 @@ def main(argv=None):
 
         # 운영 모델 2개 저장
         #  scale_h*_q*      실측 학습 모델 (관심도 포함) → 경보 단계는 이것으로 정함
-        #  scale_h*_cal_q*  평소 수준 모델 (관심도 뺌) → × 검색 급증 배수(비례 가정) = 최악 시나리오 (참고용)
+        #  scale_h*_cal_q*  평소 수준 모델 (관심도 뺌) → × 검색 급증 배수(비례 가정) = 최악 시나리오 → 밀집도 > 5명/㎡면 2단계
         for q in QUANTILES:
             saved[(h, q, len(full))].booster_.save_model(str(mdir / f"scale_h{h}_q{int(q*100)}.txt"))
             saved[(h, q, len(cal))].booster_.save_model(str(mdir / f"scale_h{h}_cal_q{int(q*100)}.txt"))
         json.dump({"features": full, "cal_features": cal, "quantiles": QUANTILES,
-                   "worst_case": "cal_q90 x search_ratio ** surge_elasticity", "surge_elasticity": SURGE_ELASTICITY},
+                   "worst_case": "max(q90, cal_q90 x 최근 7일 최대 검색 배수 ** surge_elasticity). 밀집도 > 5명/㎡면 2단계 (alert.judge.WORST_STAGE2)", "surge_elasticity": SURGE_ELASTICITY},
                   open(mdir / f"scale_h{h}_meta.json", "w"), ensure_ascii=False, indent=1)
 
     res = pd.DataFrame(rows)
@@ -119,6 +119,7 @@ def main(argv=None):
     res.to_csv(ROOT / "results" / ("scale_metrics_demo.csv" if a.demo else "scale_metrics.csv"),
                index=False, encoding="utf-8-sig")
     print(f"\n모델: {mdir.relative_to(ROOT)}/scale_h*_q*.txt  결과표: results/")
+    print("다시 학습했으면 범위 보정도 다시 할 것: python3 -m miribom_ai.scale.calibrate" + (" --demo" if a.demo else ""))
 
 if __name__ == "__main__":
     main()
