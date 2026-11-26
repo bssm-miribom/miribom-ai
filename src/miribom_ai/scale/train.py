@@ -7,7 +7,6 @@
   search_index  그날 데이터랩 검색 지수 (지역 검색어)
   holiday       공휴일·대체휴일이면 1, 아니면 0 (주말은 자동 처리)
   intent_posts  (선택) 그날 가볼래 글 수
-  rain_h1~h3, tmax_h1~h3  (선택) 판정일 07시 전에 나온 D+1~3 예보. 관측값을 넣으면 누수
 
 사용 예
   python3 -m miribom_ai.scale.train --demo          # 가짜 데이터로 학습 연습

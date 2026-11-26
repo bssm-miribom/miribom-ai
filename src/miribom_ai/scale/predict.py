@@ -48,7 +48,7 @@ def _surge_range(feat):
 def models_ready():
     return all((MODEL_DIR / f"scale_h{h}_meta.json").exists() for h in HORIZONS)
 
-def predict_place(search, base_date, holidays, base_rest, base_work, weather=None, intent=None):
+def predict_place(search, base_date, holidays, base_rest, base_work, intent=None):
     """search: base_date(D-1)까지의 검색 지수 시계열. 평소 방문객은 places.csv 값을 씀"""
     base_date = pd.Timestamp(base_date)
     idx = pd.date_range(search.index.min(), base_date + pd.Timedelta(days=max(HORIZONS) + 1))
@@ -59,8 +59,6 @@ def predict_place(search, base_date, holidays, base_rest, base_work, weather=Non
         df["intent_posts"] = intent.reindex(idx).to_numpy()
     feat = build(df).set_index("date")
     row = feat.loc[base_date].copy()
-    for k, v in (weather or {}).items():
-        row[k] = v
     out = {}
     s_lo, s_mid, s_hi = _surge_range(feat.loc[:base_date])
     for h, (feats, boosters, cal) in load_models().items():

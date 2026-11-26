@@ -32,7 +32,6 @@ src/miribom_ai/
     judge.py       예측 방문객 → 병목 밀집도 → 1·2·3단계, 판정 보류
   pipeline/
     run_daily.py   하루 판정 전체 흐름 (결과를 dict로 돌려줌)
-    weather.py     D+1~3 예보 (기상청 키 있으면 기상청, 없으면 Open-Meteo)
     holiday_calendar.py  공휴일 (대체공휴일 포함)
 places.csv    추적 장소, 검색어(|로 구분), 좌표, 평소 방문객, 병목 구간 값
 models/       학습된 모델 (가짜 데이터 모델은 models/demo/, 커밋 안 함)
@@ -57,7 +56,7 @@ result = miribom_ai.run_daily(demo=True)        # 키 없이 가짜 데이터
 - 매일 06시 예약 실행(APScheduler 등), 알림 발송, 화면은 서버 쪽에서 함
 - `save=False`를 주면 `data/daily/`에 JSON을 저장하지 않고 dict만 돌려줌
 - 모델이 없으면 `miribom_ai.ModelMissing` 예외를 냄 (가짜 모델로 운영하지 않게)
-- 환경변수: `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`(필수), `KMA_SERVICE_KEY`(선택), `MIRIBOM_HOME`(선택, 이 레포 폴더 위치)
+- 환경변수: `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`(필수), `MIRIBOM_HOME`(선택, 이 레포 폴더 위치)
 
 ## 학습·시험 (레포 폴더에서)
 ```
@@ -81,13 +80,13 @@ python3 -m miribom_ai.scale.train
 
 ## 규모 예측 구조 (2026-10-31 변경)
 - 학습 자료: 장소 단위 표 `data/place_table.csv` (`python3 -m miribom_ai.scale.build_place_table`). 장소 18곳의 데이터랩 검색 지수 + 가까운 도시철도역 하차 인원(부산교통공사, data.go.kr 3057229)을 방문객 대리 지표로 씀. 구·군 표(`data/scale_table.csv`)는 `--table`로 계속 쓸 수 있음
-- 경보 단계: 실측으로 학습한 LightGBM(요일·휴일·연휴·날씨·검색 급증 배수) 예측으로 정함. D+1 WAPE 7.7% (요일·휴일 평균 8.9%, 전날 값 17.3%)
+- 경보 단계: 실측으로 학습한 LightGBM(요일·휴일·연휴·검색 급증 배수·가볼래 글 수) 예측으로 정함. D+1 WAPE 7.7% (요일·휴일 평균 8.9%, 전날 값 17.3%)
 - 최악 시나리오(참고): 평소 수준 모델 상위 90% × 검색 급증 배수 ** `SURGE_ELASTICITY`(1.0, 비례 가정). 결과에 `최악`, 밀집도 `최악`, 5명/㎡를 넘으면 `최악 시나리오` 문장이 붙음. 단계에는 안 씀
 - 비례 가정을 단계에 안 쓰는 이유: 장소 검색 1단계 판정일 다음 날 역 하차 인원은 거의 그대로였음(탄력성 추정 ≈ 0). 비례 가정을 쓰면 이런 날 오차가 2,000% 넘음 (`results/scale_metrics.csv`의 '1단계 판정일')
 - 한계: 역 하차 인원에는 출퇴근·환승객이 섞여 있어 방문 증가가 작게 보일 수 있음. 불꽃축제처럼 당일에 검색과 방문이 같이 뛰는 행사는 전날 자료로 못 맞힘(급증일 WAPE 약 55%). 부캉이 기간 중앙·부산역·초량 하차는 거의 변화 없음 → '하루 10만 명' 출처 확인 필요
 
 ## 학습 데이터 형식
-- 규모 예측 `data/scale_table.csv`: date, area, visitors, search_index, holiday, (선택) intent_posts, rain_h1~3, tmax_h1~3. 자세한 설명은 `scale/train.py` 맨 위
+- 규모 예측 `data/scale_table.csv`: date, area, visitors, search_index, holiday, (선택) intent_posts. 자세한 설명은 `scale/train.py` 맨 위
 - 방문 의도 `data/intent_labels.csv`: post_id, text, label(1 가볼래 / 0 그냥 언급 / 빈칸 보류), place, created_at, labeler
 - `places.csv`의 평소 방문객·병목 값은 지금 예시임 [팀 확인]
 
