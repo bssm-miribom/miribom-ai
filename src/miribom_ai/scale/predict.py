@@ -45,11 +45,16 @@ def _surge_range(feat):
     up = max(last, float(r.iloc[-7:].max()))
     return tuple(float(surge_mult(x)) for x in (lo, last, up))
 
+def uses_weather():
+    """지금 모델이 날씨(rain_h*, tmax_h*)를 입력으로 쓰는지"""
+    return models_ready() and any(f.startswith("rain_h") for feats, *_ in load_models().values() for f in feats)
+
 def models_ready():
     return all((MODEL_DIR / f"scale_h{h}_meta.json").exists() for h in HORIZONS)
 
-def predict_place(search, base_date, holidays, base_rest, base_work, intent=None):
-    """search: base_date(D-1)까지의 검색 지수 시계열. 평소 방문객은 places.csv 값을 씀"""
+def predict_place(search, base_date, holidays, base_rest, base_work, intent=None, weather=None):
+    """search: base_date(D-1)까지의 검색 지수 시계열. 평소 방문객은 places.csv 값을 씀
+    weather: pipeline.weather.forecast() 결과 {rain_h1, tmax_h1, ...}. 날씨를 입력으로 학습한 모델일 때만 쓰임"""
     base_date = pd.Timestamp(base_date)
     idx = pd.date_range(search.index.min(), base_date + pd.Timedelta(days=max(HORIZONS) + 1))
     df = pd.DataFrame({"date": idx, "area": "x", "visitors": np.nan,
@@ -59,6 +64,8 @@ def predict_place(search, base_date, holidays, base_rest, base_work, intent=None
         df["intent_posts"] = intent.reindex(idx).to_numpy()
     feat = build(df).set_index("date")
     row = feat.loc[base_date].copy()
+    for k, v in (weather or {}).items():
+        row[k] = v
     out = {}
     s_lo, s_mid, s_hi = _surge_range(feat.loc[:base_date])
     for h, (feats, boosters, cal, c) in load_models().items():

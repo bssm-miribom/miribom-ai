@@ -44,13 +44,27 @@ def build(df):
             g[f"run_h{h}"] = run.shift(-off)
             nxt = pd.Series(np.where(rest == 1, g.index, pd.NaT), index=g.index).bfill()
             g[f"to_rest_h{h}"] = ((nxt - g.index).dt.days).shift(-off)
+            # 날씨: 정답 날짜의 강수량(mm)·최고기온. 운영은 판정일 아침 예보를 넣음
+            #  rain_f{h}/tmax_f{h}가 있으면 그날을 h일 전에 내다본 과거 예보, 없으면 관측값(rain/tmax, 예보가 완벽하다는 가정)
+            for k in ("rain", "tmax"):
+                src = f"{k}_f{h}" if f"{k}_f{h}" in g else k
+                if src in g:
+                    g[f"{k}_h{h}"] = g[src].shift(-off)
         out.append(g.reset_index())
     return pd.concat(out, ignore_index=True)
 
 def features(h, cols, with_interest=True):
     # 지역 이름은 넣지 않음. 처음 보는 장소에도 쓰려고 평소 방문객 규모(log_base)로만 구분함
     f = [f"dow_h{h}", f"hol_h{h}", f"rest_h{h}", f"run_h{h}", f"to_rest_h{h}", "log_base"]
+    f += [c for c in (f"rain_h{h}", f"tmax_h{h}") if c in cols]
     if with_interest:
         f += [c for c in INTEREST if c in cols]
     return f
 
+
+def add_weather(raw, path):
+    """학습 표에 부산 일별 날씨를 날짜로 붙임. 관측(rain, tmax) 또는 과거 예보(rain_f1~3, tmax_f1~3). 모든 장소에 같은 값"""
+    w = pd.read_csv(path, parse_dates=["date"])
+    w = w[["date"] + [c for c in w.columns if c in ("rain", "tmax") or c[:6] in ("rain_f", "tmax_f")]]
+    raw = raw.copy(); raw["date"] = pd.to_datetime(raw["date"])
+    return raw.drop(columns=[c for c in w.columns if c != "date" and c in raw]).merge(w, on="date", how="left")
