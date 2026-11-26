@@ -57,8 +57,31 @@ def nan_to_none(x):
 class ModelMissing(RuntimeError):
     pass
 
-def run(judge_day=None, demo=False, save=True):
-    """judge_day: 판정일 D (기본 오늘, 한국시간). save=True면 data/daily/에 JSON도 저장"""
+def apply_scenario(s, place, scenario):
+    """가상 시나리오: 한 장소의 검색 지수를 start일부터 배수만큼 키움 (실제 값 아님, 위험 단계 시연용).
+    나머지 장소·과거 값은 그대로라 같은 모델·판정 규칙이 커진 입력에 어떻게 반응하는지 보여줌"""
+    if not scenario or place != scenario["place"]:
+        return s
+    s = s.astype(float).copy()
+    s[s.index >= pd.Timestamp(scenario["start"])] *= float(scenario["multiplier"])
+    return s
+
+SCENARIO_ASSUME = "검색이 늘어난 만큼 방문도 늘어난다고 가정 (최악 시나리오 값을 예측값으로 씀, 실측으로 확인 안 된 가정)"
+
+def scenario_pred(pred):
+    """가상 시나리오의 예측: 실측 모델은 검색량에 거의 반응하지 않아서, '최악 시나리오'(검색 N배면 방문 N배)를 예측값으로 씀"""
+    out = {}
+    for h, v in pred.items():
+        w = v.get("최악")
+        out[h] = v if w is None else {**v, "하위10": v["중앙값"], "중앙값": w, "상위90": w}
+    return out
+
+def run(judge_day=None, demo=False, save=True, scenario=None):
+    """judge_day: 판정일 D (기본 오늘, 한국시간). save=True면 data/daily/에 JSON도 저장
+    scenario: {"place": 장소 이름, "multiplier": 배수, "start": "YYYY-MM-DD"} 가상 시나리오 (이때는 저장 안 함).
+      그 장소만 검색 지수를 start일부터 배수만큼 키우고, 예측은 '검색 증가 = 방문 증가' 가정(SCENARIO_ASSUME)으로 바꿈"""
+    if scenario:
+        save = False
     if judge_day is None:
         judge_day = "2026-09-20" if demo else pd.Timestamp.now(tz="Asia/Seoul").normalize().tz_localize(None)
     judge_day = pd.Timestamp(judge_day)
@@ -82,6 +105,7 @@ def run(judge_day=None, demo=False, save=True):
         r = {"장소": p["place"], "판정일": str(judge_day.date()), "자료 기준일": str(base.date())}
         try:
             s = fake_search(p["place"], base) if demo else fetch_datalab(p["keywords"].split("|")[:20], base, cid, cs)
+            s = apply_scenario(s, p["place"], scenario)
             sj = judge_surge(surge_ratio(s), base)
             r["급증"] = sj
             intent = intent_series(p["place"])
@@ -98,6 +122,9 @@ def run(judge_day=None, demo=False, save=True):
             if weather is None:                                   # 부산 지점 1곳 예보라 판정일마다 한 번만 받음
                 weather, wsrc = forecast(judge_day) if scale.uses_weather() else ({}, "모델이 날씨를 안 씀")
             pred, _ = scale.predict_place(s, base, hol, p["base_rest"], p["base_work"], intent=intent, weather=weather)
+            if scenario and p["place"] == scenario["place"]:
+                r["실측 모델 예측"], r["가정"] = pred, SCENARIO_ASSUME
+                pred = scenario_pred(pred)
             r["예측"], r["날씨 출처"] = pred, wsrc
             r.update(judge_alert(pred, p.to_dict()))
         except Exception as e:                                    # 한 곳이 실패해도 나머지는 계속
@@ -106,7 +133,7 @@ def run(judge_day=None, demo=False, save=True):
         if not demo: time.sleep(0.2)
 
     payload = nan_to_none({"판정일": str(judge_day.date()), "생성 시각": pd.Timestamp.now(tz="Asia/Seoul").isoformat(),
-                           "가짜 데이터": demo, "장소": results})
+                           "가짜 데이터": demo, "가상 시나리오": scenario, "장소": results})
     if save:
         out_dir = ROOT / "data" / "daily"; out_dir.mkdir(parents=True, exist_ok=True)
         name = f"{judge_day:%Y%m%d}{'_demo' if demo else ''}.json"
