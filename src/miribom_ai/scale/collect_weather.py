@@ -3,7 +3,7 @@
   python3 -m miribom_ai.scale.collect_weather --start 2023-12-01 --end 2026-10-31
 
 출처 (위에서부터 먼저 있는 것)
-  API허브 키        기상청 API허브 종관기상관측(ASOS) 일자료 kma_sfcdd3, 부산 지점(159)
+  API허브 키        기상청 API허브 종관기상관측(ASOS) 일자료 kma_sfcdd, 부산 지점(159)
                     (API허브에서 'ASOS 일자료'를 활용신청해야 함)
   공공데이터포털 키  기상청_지상(종관, ASOS) 일자료 조회서비스, 부산 지점(159)
                     (공공데이터포털에서 이 서비스를 따로 활용신청해야 함)
@@ -21,34 +21,47 @@ STN = 159                                  # 부산 ASOS
 LAT, LON = 35.1047, 129.0320               # 부산 지점 좌표 (Open-Meteo용)
 OUT = ROOT / "data" / "raw" / "weather" / "busan_daily.csv"
 
-def _apihub(start, end, key):
-    # 응답: '#'로 시작하는 설명 줄 + 공백 구분 표. 1열 TM(YYYYMMDD), 열 순서는 설명 줄 기준
-    url = "https://apihub.kma.go.kr/api/typ01/url/kma_sfcdd3.php"
-    rows = []
-    for y0 in pd.date_range(start, end, freq="YS").union([pd.Timestamp(start)]):
-        y1 = min(pd.Timestamp(end), pd.Timestamp(f"{y0.year}-12-31"))
-        r = requests.get(url, params=dict(tm1=f"{y0:%Y%m%d}", tm2=f"{y1:%Y%m%d}", stn=STN, help=1, authKey=key), timeout=60)
-        if r.status_code != 200:
-            raise RuntimeError(f"API허브 {r.status_code}: {r.content.decode('utf-8', 'replace')[:120]}")
-        rows.append(r.content.decode("euc-kr", errors="replace"))
-    return _parse_sfcdd("\n".join(rows))
+def _apihub(start, end, key, workers=8):
+    """API허브 kma_sfcdd.php는 하루치만 줌(기간 조회 kma_sfcdd3는 별도 신청). 응답이 느려(건당 수십 초) 여러 개를 동시에 받고,
+    받은 날은 CACHE에 쌓아 두어 끊겨도 이어 받음. 열: 0 TM, 11 TA_MAX(최고기온), 38 RN_DAY(일강수량, -9 = 강수 없음)"""
+    from concurrent.futures import ThreadPoolExecutor
+    url = "https://apihub.kma.go.kr/api/typ01/url/kma_sfcdd.php"
+    cache = OUT.parent / "kma_sfcdd_cache.csv"
+    have = pd.read_csv(cache, dtype=str) if cache.exists() else pd.DataFrame(columns=["tm", "tmax", "rain"])
+    todo = [d for d in pd.date_range(start, end).strftime("%Y%m%d") if d not in set(have["tm"])]
 
-def _parse_sfcdd(text):
-    # help=1이면 열 설명이 '#  n. NAME ...' 형태로 옴. TA_MAX(최고기온), RN_DAY(일강수량)의 열 번호를 찾음
-    names = {}
-    for line in text.splitlines():
-        s = line.lstrip("#").strip()
-        parts = s.split()
-        if len(parts) >= 2 and parts[0].rstrip(".").isdigit():
-            names.setdefault(parts[1], int(parts[0].rstrip(".")) - 1)
-    data = [l.split() for l in text.splitlines() if l and not l.startswith("#") and l.split()[0].isdigit()]
-    if not data or "TA_MAX" not in names or "RN_DAY" not in names:
-        raise RuntimeError("API허브 응답 형식을 못 읽음 (키·활용신청 확인)")
-    df = pd.DataFrame({"date": pd.to_datetime([d[0][:8] for d in data]),
-                       "tmax": [float(d[names["TA_MAX"]]) for d in data],
-                       "rain": [float(d[names["RN_DAY"]]) for d in data]})
+    def one(d):
+        for _ in range(4):
+            try:
+                r = requests.get(url, params=dict(tm=d, stn=STN, help=0, authKey=key), timeout=200)
+                if r.status_code == 403:
+                    raise PermissionError(r.content.decode("utf-8", "replace")[:120])
+                rows = [l.split(",") for l in r.content.decode("euc-kr", "replace").splitlines() if l[:8] == d]
+                if r.status_code == 200 and rows:
+                    return d, rows[0][11], rows[0][38]
+            except PermissionError:
+                raise
+            except Exception:
+                pass
+        return d, None, None
+
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    if not cache.exists():
+        cache.write_text("tm,tmax,rain\n")
+    with ThreadPoolExecutor(workers) as ex, open(cache, "a") as fh:
+        for n, (d, tmax, rain) in enumerate(ex.map(one, todo), 1):
+            if tmax is not None:
+                fh.write(f"{d},{tmax},{rain}\n"); fh.flush()
+            if n % 50 == 0:
+                print(f"  {n}/{len(todo)}", flush=True)
+    c = pd.read_csv(cache, dtype={"tm": str}).drop_duplicates("tm")
+    c = c[(c["tm"] >= f"{pd.Timestamp(start):%Y%m%d}") & (c["tm"] <= f"{pd.Timestamp(end):%Y%m%d}")]
+    df = pd.DataFrame({"date": pd.to_datetime(c["tm"]), "tmax": c["tmax"].astype(float), "rain": c["rain"].astype(float)})
     df.loc[df["tmax"] <= -50, "tmax"] = float("nan")
-    df.loc[df["rain"] < 0, "rain"] = 0.0             # -9 = 강수 없음
+    df.loc[df["rain"] < 0, "rain"] = 0.0
+    missing = len(pd.date_range(start, end)) - len(df)
+    if missing:
+        print(f"  못 받은 날 {missing}일 (다시 실행하면 그날만 받음)")
     return df.assign(source="기상청 ASOS(API허브)")
 
 def _datagokr(start, end, key):
