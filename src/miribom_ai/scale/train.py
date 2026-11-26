@@ -19,7 +19,7 @@ import numpy as np, pandas as pd, lightgbm as lgb
 from sklearn.ensemble import RandomForestRegressor
 from miribom_ai.scale.config import QUANTILES, HORIZONS, PARAMS, SURGE_ELASTICITY
 from miribom_ai.scale.demo_data import make_demo
-from miribom_ai.scale.features import build, features
+from miribom_ai.scale.features import build, features, add_weather
 from miribom_ai.scale.metrics import metrics
 from miribom_ai.scale.predict import surge_mult
 
@@ -33,9 +33,12 @@ def main(argv=None):
     ap.add_argument("--val-start", help="검증 기간 시작일 (기본: 뒤에서 30%% 지점)")
     ap.add_argument("--test-start", help="평가 기간 시작일 (기본: 뒤에서 15%% 지점)")
     ap.add_argument("--exclude", default="2026-09-10:2026-10-05", help="학습·검증에서 뺄 평가 전용 기간 (부캉이)")
+    ap.add_argument("--weather", help="날씨 CSV (collect_weather.py 결과). 주면 강수량·최고기온을 입력에 넣어 학습 (운영 때 예보가 필요)")
     a = ap.parse_args(argv)
 
     raw = make_demo() if a.demo else pd.read_csv(a.table)
+    if a.weather:
+        raw = add_weather(raw, a.weather)
     mdir = ROOT / "models" / ("demo" if a.demo else "")   # 가짜 데이터 모델은 models/demo/에 따로 저장
     mdir.mkdir(parents=True, exist_ok=True)
     df = build(raw)

@@ -15,4 +15,4 @@ data/daily/latest_demo.json
 models/demo/
 *.egg-info/
 data/raw/
-results/rolling_preds.csv
+results/rolling_preds*.csv

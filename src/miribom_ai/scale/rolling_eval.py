@@ -14,7 +14,7 @@ import argparse, math, warnings
 warnings.filterwarnings("ignore")
 import numpy as np, pandas as pd, lightgbm as lgb
 from miribom_ai.scale.config import QUANTILES, HORIZONS, PARAMS
-from miribom_ai.scale.features import build, features
+from miribom_ai.scale.features import build, features, add_weather
 from miribom_ai.paths import ROOT
 
 VAL_DAYS = 60
@@ -42,8 +42,13 @@ def main(argv=None):
     ap.add_argument("--table", default=str(ROOT / "data" / "place_table.csv"))
     ap.add_argument("--start", default="2025-01"); ap.add_argument("--end", default="2026-09")
     ap.add_argument("--exclude", default="2026-09-10:2026-10-05")
+    ap.add_argument("--weather", help="날씨 CSV (collect_weather.py 결과). 주면 강수량·최고기온을 입력에 넣음")
+    ap.add_argument("--tag", default="", help="결과 파일 이름 뒤에 붙일 말 (예: _weather)")
     a = ap.parse_args(argv)
-    df = build(pd.read_csv(a.table))
+    raw = pd.read_csv(a.table)
+    if a.weather:
+        raw = add_weather(raw, a.weather)
+    df = build(raw)
     ex0, ex1 = map(pd.Timestamp, a.exclude.split(":"))
     origins = pd.date_range(a.start, a.end, freq="MS")
     preds = []
@@ -85,7 +90,7 @@ def main(argv=None):
                 "bukangi": ((te["tgt"] >= ex0) & (te["tgt"] <= ex1)).to_numpy()}))
         print(f"{t:%Y-%m} 완료", flush=True)
     P = pd.concat(preds, ignore_index=True)
-    P.to_csv(ROOT / "results" / "rolling_preds.csv", index=False, encoding="utf-8-sig")
+    P.to_csv(ROOT / "results" / f"rolling_preds{a.tag}.csv", index=False, encoding="utf-8-sig")
 
     rows = []
     main_set = P[~P["bukangi"]]
@@ -109,8 +114,8 @@ def main(argv=None):
     pd.set_option("display.width", 220); pd.set_option("display.float_format", lambda x: f"{x:,.3f}")
     print(res.to_string(index=False))
     print("\n시점별 D+1:"); print(by_fold[by_fold["h"] == 1].to_string(index=False))
-    res.to_csv(ROOT / "results" / "rolling_eval.csv", index=False, encoding="utf-8-sig")
-    by_fold.to_csv(ROOT / "results" / "rolling_eval_by_origin.csv", index=False, encoding="utf-8-sig")
+    res.to_csv(ROOT / "results" / f"rolling_eval{a.tag}.csv", index=False, encoding="utf-8-sig")
+    by_fold.to_csv(ROOT / "results" / f"rolling_eval_by_origin{a.tag}.csv", index=False, encoding="utf-8-sig")
 
 if __name__ == "__main__":
     main()

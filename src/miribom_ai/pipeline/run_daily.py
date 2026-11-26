@@ -6,6 +6,7 @@ FastAPI 서버에서는 miribom_ai.run_daily()로 불러서 씀. 예약 실행·
   python3 -m miribom_ai.pipeline.run_daily --date 2026-09-20 # 특정 판정일
 
 필요한 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET (필수, --demo 제외)
+선택: KMA_SERVICE_KEY 또는 KMA_AUTH_KEY (기상청 단기예보, 모델이 날씨를 쓸 때만. 없으면 Open-Meteo)
 """
 import argparse, json, os, time
 from pathlib import Path
@@ -15,6 +16,7 @@ from miribom_ai.surge.detect import surge_ratio, judge as judge_surge
 from miribom_ai.scale import predict as scale
 from miribom_ai.alert.judge import judge as judge_alert
 from miribom_ai.pipeline.holiday_calendar import holiday_set
+from miribom_ai.pipeline.weather import forecast
 
 from miribom_ai.paths import ROOT
 
@@ -75,6 +77,7 @@ def run(judge_day=None, demo=False, save=True):
             raise RuntimeError("NAVER_CLIENT_ID, NAVER_CLIENT_SECRET 환경변수가 없음")
     places = pd.read_csv(ROOT / "places.csv")
     results = []
+    weather, wsrc = None, None
     for _, p in places.iterrows():
         r = {"장소": p["place"], "판정일": str(judge_day.date()), "자료 기준일": str(base.date())}
         try:
@@ -92,8 +95,10 @@ def run(judge_day=None, demo=False, save=True):
                 r["단계"], r["이유"] = "판정 보류", "평소 방문객 값 없음 (places.csv)"
                 r["빠진 값"] = [k for k in ("base_rest", "base_work") if pd.isna(p[k])]
                 results.append(r); continue
-            pred, _ = scale.predict_place(s, base, hol, p["base_rest"], p["base_work"], intent=intent)
-            r["예측"] = pred
+            if weather is None:                                   # 부산 지점 1곳 예보라 판정일마다 한 번만 받음
+                weather, wsrc = forecast(judge_day) if scale.uses_weather() else ({}, "모델이 날씨를 안 씀")
+            pred, _ = scale.predict_place(s, base, hol, p["base_rest"], p["base_work"], intent=intent, weather=weather)
+            r["예측"], r["날씨 출처"] = pred, wsrc
             r.update(judge_alert(pred, p.to_dict()))
         except Exception as e:                                    # 한 곳이 실패해도 나머지는 계속
             r["단계"], r["이유"] = "수집 실패", f"{type(e).__name__}: {str(e)[:200]}"
